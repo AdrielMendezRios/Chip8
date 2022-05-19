@@ -1,3 +1,13 @@
+# My stuff
+trash/
+chip8
+
+# VS Code stuff
+configurationCache.log
+settings.json
+targets.log
+dryrun.log
+
 # Prerequisites
 *.d
 
