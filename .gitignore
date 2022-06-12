@@ -1,6 +1,8 @@
 # My stuff
 trash/
 chip8
+bc_test.txt
+programs/*
 
 # VS Code stuff
 configurationCache.log
