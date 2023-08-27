@@ -3,6 +3,9 @@ trash/
 chip8
 bc_test.txt
 programs/*
+test
+test.c
+test.cpp
 
 # VS Code stuff
 configurationCache.log
