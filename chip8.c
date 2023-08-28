@@ -1,7 +1,23 @@
 /*
     written by Adriel Mendez
     [Work in progress]
-    Chip8 emulator written in C using raylib.
+    A very simple, Chip8 emulator written in C using raylib. it mostly works, 
+    but there are still some bugs. most are rendering related but need a debugger
+    further investigate.
+
+    My goal with this project was to practice and learn more about the C language,
+    how emulators work, and expose myself to the raylib library, as such i made it
+    as simple as possible and wrote everything in a single self-contained file. 
+    I still have a  lot to learn about all of these topics, but excited about 
+    my progress.
+    
+    TODO:
+    - The next steps is to split up the `interpreter` function into smaller functions
+    of related instructions.
+    - improve performance rendering the frame to the screen. 
+    - make a chip8.h and clean up the chip8.c file
+    
+
     implemented with the help of some amazing resources online.
     mainly:
         http://devernay.free.fr/hacks/chip8/C8TECH10.HTM#Fx15 (cowgod's chip8 technical reference)
@@ -12,8 +28,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <dirent.h>
 #include <time.h>
 
+// raylib modules
 #include <raylib.h>
 #include <raymath.h>
 
@@ -25,9 +43,11 @@
 #define WIDTH 64
 #define HEIGHT 32
 
+// global variables
 unsigned char frameBuffer[32][64];
 RenderTexture2D frame_target;
-int loop_detected = 0;
+
+// chip8 emulator Struct
 typedef struct Chip8{
     uint16_t    pc, I, opcode, sp;
     uint16_t    stack[MAX_SUBROUTINES];
@@ -58,6 +78,7 @@ static const uint8_t fonts[] = {
     0xF0, 0x80, 0xF0, 0x80, 0x80  // F
 };
 
+// mapping from keyboard keys to keypad keys
 int keypadMapping(int kb_key){
     switch (kb_key){
         case(KEY_ONE):  return 0x1;
@@ -81,7 +102,7 @@ int keypadMapping(int kb_key){
     return -1;
 }
 
-
+// mapping from keypad keys to keyboard keys
 int keyboardMapping(int keypad_key){
     switch (keypad_key){
         case 0x1: return KEY_ONE;
@@ -105,7 +126,6 @@ int keyboardMapping(int keypad_key){
     return -1;
 }
 
-
 void loadfonts(Chip8 *chip) {
     size_t n = sizeof(fonts)/sizeof(*fonts);
     size_t i;
@@ -114,24 +134,28 @@ void loadfonts(Chip8 *chip) {
     }
 }
 
+// stores current opcode into chip->opcode
 void getop(Chip8 *chip){
     chip->opcode = chip->memory[chip->pc] << 8 | chip->memory[chip->pc+1];
     // printf("Generated opcode: %x", )
 }
 
-// int flippix(Chip8 *chip, int x, int y){
-//     if (y < 0 || y >= HEIGHT) return 0;
-//     if (x < 0 || x >= WIDTH) return 0;
-//     chip->screen[y][x] ^= 1;
-//     return !chip->screen[y][x];
-// }
+// not being used. kept as notes
+int flippix(Chip8 *chip, int x, int y){
+    if (y < 0 || y >= HEIGHT) return 0;
+    if (x < 0 || x >= WIDTH) return 0;
+    chip->screen[y][x] ^= 1;
+    return !chip->screen[y][x];
+}
 
+// initializes chip8 emulators memory space
 void init_mem(Chip8 *chip){
     for(int i = 0; i < MEMORY_SIZE; i++){
         chip->memory[i] = 0x0;
     }
 }
 
+// clears the emulators logical screen
 void clear_screen(Chip8 *chip){
     memset(chip->screen, 0, sizeof(chip->screen));
 }
@@ -145,8 +169,6 @@ void update_timers(Chip8 *chip){
         if (chip->soundTimer > 0) chip->soundTimer--;
         prev = now;
     }
-    // printf("delay timer: %d\n", chip->delayTimer);
-    printf("sound timer: %d\n", chip->soundTimer);
 }
 
 // very basic sound function. [need better sound implementation]
@@ -159,8 +181,42 @@ void play_game_sound(unsigned char timer, Sound sound){
 
 }
 
+// renders the frame to the frame_target raylib texture
+void render_frame() {
+    // Clear the rendering target
+    BeginTextureMode(frame_target);
+    // ClearBackground(BLACK);
 
-/*                       Helper functions                                   */
+    // Draw the pixels onto the rendering target
+    for (int y = 0; y < 32; y++) {
+        for (int x = 0; x < 64; x++) {
+            if (frameBuffer[y][x]) {
+                DrawPixel(x, y, WHITE);
+            }
+            else{
+                DrawPixel(x, y, BLACK);
+            }
+        }
+    }
+
+    EndTextureMode();
+}
+
+// draws the frame_target texture to the screen
+void draw_frame(){
+    BeginDrawing();
+        // ClearBackground(BLACK);
+        DrawTexturePro(frame_target.texture, (Rectangle){0, 0, (float)frame_target.texture.width, (float)-frame_target.texture.height}, (Rectangle){0, 0, 640, 320}, (Vector2){0, 0}, 0.0f, WHITE);
+    EndDrawing();
+}
+
+
+/****************************************************************                                
+
+                        helper functions
+                        for debugging                               
+
+*****************************************************************/
 void print_rom_in_memory(Chip8 *chip){
     printf("Rom in memory. size: %zu bytes\n", chip->rom_size);
     for(int i = chip->pc-8; i < chip->pc+12; i+=2){
@@ -234,9 +290,13 @@ void printState(Chip8 *chip){
     
 }
 
-/*                                end of helper functions                               */
+/****************************************************************                                
 
+                    end of helper functions                               
 
+*****************************************************************/
+
+// interprets the current chip8 opcode and executes the instruction
 void interpreter(Chip8 *chip){
     
     getop(chip);
@@ -700,6 +760,7 @@ void interpreter(Chip8 *chip){
     }
 }
 
+// initialize chip8 emulator
 Chip8* chip8_init(){
     Chip8 *chip = (Chip8*)malloc(sizeof(Chip8));
     loadfonts(chip);
@@ -708,7 +769,7 @@ Chip8* chip8_init(){
     return chip;
 }
 
-
+// loads the fonts into chip8 memory
 void load_rom(Chip8 *chip, char* path){
     FILE *rom = NULL;
     size_t rom_size;
@@ -753,60 +814,68 @@ void load_rom(Chip8 *chip, char* path){
 }
 
 
-void render_frame() {
-    // Clear the rendering target
-    BeginTextureMode(frame_target);
-    // ClearBackground(BLACK);
+int main(){
+    // get list of programs in `programs` folder
+    DIR *d;
+    struct dirent *dir;
+    // open directory stream
+    d = opendir("programs");
 
-    // Draw the pixels onto the rendering target
-    for (int y = 0; y < 32; y++) {
-        for (int x = 0; x < 64; x++) {
-            if (frameBuffer[y][x]) {
-                DrawPixel(x, y, GRAY);
-            }
-            else{
-                DrawPixel(x, y, RAYWHITE);
-            }
+    // get number of programs in `programs` folder
+    int program_count = 0;
+    while((dir = readdir(d)) != NULL){
+        // only increase the counter if the file is a regular file
+        if (dir->d_type == DT_REG){
+            program_count++;
         }
     }
 
-    EndTextureMode();
-}
+    // allocate enough memory to fill list of all programs in programs folder
+    char** programs = (char**)malloc(sizeof(char*) * program_count);
+    
+    // reset directory stream
+    rewinddir(d);
 
-void draw_frame(){
-    BeginDrawing();
-        // ClearBackground(BLACK);
-        DrawTexturePro(frame_target.texture, (Rectangle){0, 0, (float)frame_target.texture.width, (float)-frame_target.texture.height}, (Rectangle){0, 0, 640, 320}, (Vector2){0, 0}, 0.0f, WHITE);
-    EndDrawing();
-}
+    // populate list with program names
+    int i = 0;
+    while((dir = readdir(d)) != NULL){
+        // only add the file name to the list if the file is a regular file
+        if (dir->d_type == DT_REG){
+            programs[i] = dir->d_name;
+            i++;
+        }
+    }
+    
+    // print list of programs for user to pick from
+    for(int i = 0; i < program_count; i++){
+        printf("%d. %s\n", i+1, programs[i]);
+    }
+    
+    //close directory stream
+    closedir(d);
 
+    // get user choice
+    printf("Which game would you like to play?[enter the number]\n");
+    char str_choice;
+    scanf("%s", &str_choice);
+    int choice = atoi(&str_choice);
 
+    char* folder = "programs/";
+    char* p = (char*)malloc(sizeof(char) * (strlen(folder) + strlen(programs[choice-1]) + 1));
+    strcat(p, folder);
+    strcat(p, programs[choice-1]);
+    printf("loading: \"%s\"\n", p);
 
-int main(){
+    // making it look like the emulator is loading the rom (makes it less jarring when the window appears)    
+    sleep(3);
 
+    // initialize Chip8 emulator
     Chip8 *chip = chip8_init();
-    // char *p = "IBM.ch8";
-    // char *p = "programs/Clock.ch8";
-    // char *p = "programs/Life.ch8";
-    // char *p = "programs/Picture.ch8";
-    // char *p = "programs/Maze.ch8";
-    // char *p = "programs/ParticleDemo.ch8";
-    // char* p = "programs/Sierpinski.ch8";
-    // char* p = "programs/ZeroDemo.ch8";
-    // char* p = "programs/Trip8Demo.ch8";
-    char* p = "programs/Airplane.ch8";
-    // char* p = "programs/flightrunner.ch8";
-    // char* p = "programs/br8kout.ch8";
-    // char *p = "programs/bc_test.ch8";
-    // char *p = "programs/rockto.ch8";
-    // char* p = "programs/test_opcode.ch8";
-    // char* p = "programs/Astro Dodge [Revival Studios, 2008].ch8";
     load_rom(chip, p);
 
-
     // initialize Raylib window
-    InitWindow(640, 320, "Chip8 Emulator");
-    SetTargetFPS(100);
+    InitWindow(640, 320, "Chip8 Emulator by Adriel Méndez Ríos");
+    SetTargetFPS(800);
 
     // initialize Raylib Audio
     InitAudioDevice();
@@ -814,14 +883,15 @@ int main(){
     // initialize Raylib Texture/buffer
     frame_target = LoadRenderTexture(64, 32);
 
-    // set up sound
-    Wave wav = LoadWave("medSineWave.wav");
+    // setup Raylib sound
+    Wave wav = LoadWave("Sounds/medSineWave.wav");
     Sound st_sound = LoadSoundFromWave(wav);
 
     // Game Loop
     while(!WindowShouldClose()){
         interpreter(chip);
         update_timers(chip);
+        // hack, need better solution
         if (chip->soundTimer > 0 && !IsSoundPlaying(st_sound)){
             play_game_sound(chip->soundTimer, st_sound);
         }
@@ -831,8 +901,18 @@ int main(){
     }
 
     // Clean up
-    UnloadRenderTexture(frame_target);
     free(chip);
+    free(p);
+    for(int i = 0; i < program_count; i++){
+        // free memory for each allocated program name
+        free(programs[i]);
+    }
+    // free program list memory
+    free(programs);
+
+    UnloadRenderTexture(frame_target);
+    UnloadSound(st_sound);
+    UnloadWave(wav);
     CloseWindow();
     CloseAudioDevice();
 
