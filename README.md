@@ -19,3 +19,4 @@ some more features to add in the future will be:
 
 There are some rendering issues that I still need to work out so if you find any and/or know what might be causing them
 please let me know!! thanks in advanced 🙏🏼
+also note , the audio system is basically a placeholder for now, it simply '_works_' for now but by no means the final product.
