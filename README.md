@@ -13,8 +13,8 @@ some more features to add in the future will be:
 ## how to run
 1. clone the directory
 2. cd into chip8 directory
-3. run: make chip8
-4. ./chip8
+3. run: `make chip8`
+4. run: `./chip8`
 5. optionally, add you're own ROMs to the 'programs' folder then pick them from the menu after rerunning ./chip8 command
 
 There are some rendering issues that I still need to work out so if you find any and/or know what might be causing them
