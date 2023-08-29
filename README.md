@@ -18,5 +18,5 @@ some more features to add in the future will be:
 5. optionally, add you're own ROMs to the 'programs' folder then pick them from the menu after rerunning ./chip8 command
 
 There are some rendering issues that I still need to work out so if you find any and/or know what might be causing them
-please let me know!! thanks in advanced 🙏🏼
+please let me know!! thanks in advanced 🙏🏼.
 also note , the audio system is basically a placeholder for now, it simply '_works_' for now but by no means the final product.
