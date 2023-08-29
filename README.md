@@ -16,3 +16,6 @@ some more features to add in the future will be:
 3. run: make chip8
 4. ./chip8
 5. optionally, add you're own ROMs to the 'programs' folder then pick them from the menu after rerunning ./chip8 command
+
+There are some rendering issues that I still need to work out so if you find any and/or know what might be causing them
+please let me know!! thanks in advanced 🙏🏼
