@@ -1,7 +1,7 @@
 /*
     written by Adriel Mendez
     [Work in progress]
-    A very simple, Chip8 emulator written in C using raylib. it mostly works, 
+    A very simple, Chip8 emulator written in C using raylib. its fully functional, 
     but there are still some bugs. most are rendering related but need a debugger
     further investigate.
 
