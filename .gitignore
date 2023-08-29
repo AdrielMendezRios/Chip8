@@ -7,6 +7,9 @@ test
 test.c
 test.cpp
 
+# mac stuff
+.DS_Store
+
 # VS Code stuff
 configurationCache.log
 settings.json

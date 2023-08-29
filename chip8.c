@@ -126,6 +126,7 @@ int keyboardMapping(int keypad_key){
     return -1;
 }
 
+// load fonts into Emulator memory
 void loadfonts(Chip8 *chip) {
     size_t n = sizeof(fonts)/sizeof(*fonts);
     size_t i;
@@ -309,7 +310,7 @@ void interpreter(Chip8 *chip){
     uint8_t I = chip->I;
 
 
-
+    // This Switch statement is too huge, needs breaking down, but it works for now.
     switch (opcode & 0xF000){
         case 0x0000:
             /* fall in if opcode is an instruction starting with 0x0___*/
@@ -860,14 +861,15 @@ int main(){
     scanf("%s", &str_choice);
     int choice = atoi(&str_choice);
 
+    // create path to program
     char* folder = "programs/";
     char* p = (char*)malloc(sizeof(char) * (strlen(folder) + strlen(programs[choice-1]) + 1));
     strcat(p, folder);
     strcat(p, programs[choice-1]);
     printf("loading: \"%s\"\n", p);
 
-    // making it look like the emulator is loading the rom (makes it less jarring when the window appears)    
-    sleep(3);
+    // making it look like the emulator is loading the rom (makes it less jarring when the window appears imo)    
+    sleep(2);
 
     // initialize Chip8 emulator
     Chip8 *chip = chip8_init();
@@ -875,7 +877,7 @@ int main(){
 
     // initialize Raylib window
     InitWindow(640, 320, "Chip8 Emulator by Adriel Méndez Ríos");
-    SetTargetFPS(800);
+    SetTargetFPS(480);
 
     // initialize Raylib Audio
     InitAudioDevice();
@@ -897,19 +899,14 @@ int main(){
         }
         render_frame();
         draw_frame();
-
     }
 
     // Clean up
     free(chip);
     free(p);
-    for(int i = 0; i < program_count; i++){
-        // free memory for each allocated program name
-        free(programs[i]);
-    }
-    // free program list memory
     free(programs);
 
+    // free up Raylib resources
     UnloadRenderTexture(frame_target);
     UnloadSound(st_sound);
     UnloadWave(wav);
