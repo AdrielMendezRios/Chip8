@@ -861,6 +861,12 @@ int main(){
     scanf("%s", &str_choice);
     int choice = atoi(&str_choice);
 
+    printf("set frame rate. recommended [100-10,000+]\n");
+    char str_fps[10];
+    scanf("%s", str_fps);
+    int target_fps = atoi(str_fps);
+    printf("target fps: %d\n", target_fps);
+
     // create path to program
     char* folder = "programs/";
     char* p = (char*)malloc(sizeof(char) * (strlen(folder) + strlen(programs[choice-1]) + 1));
@@ -877,7 +883,7 @@ int main(){
 
     // initialize Raylib window
     InitWindow(640, 320, "Chip8 Emulator by Adriel Méndez Ríos");
-    SetTargetFPS(480);
+    SetTargetFPS(target_fps);
 
     // initialize Raylib Audio
     InitAudioDevice();
