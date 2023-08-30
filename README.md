@@ -34,7 +34,3 @@ Demos:
 - https://github.com/loktar00/chip8/blob/master/roms/Trip8%20Demo%20(2008)%20%5BRevival%20Studios%5D.ch8
 - https://github.com/loktar00/chip8/blob/master/roms/Particle%20Demo%20%5BzeroZshadow%2C%202008%5D.ch8
 - https://github.com/loktar00/chip8/blob/master/roms/Zero%20Demo%20%5BzeroZshadow%2C%202007%5D.ch8
-
-There are some rendering issues that I still need to work out so if you know what might be causing them
-please let me know (especially why the Chip8 fonts wont render)!! thanks in advanced 🙏🏼.
-also note, the audio system is basically a placeholder, it simply '_works_' for now but by no means the final iteration.
