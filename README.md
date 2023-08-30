@@ -13,7 +13,7 @@ some more features to add in the future will be:
 ## how to run
 1. clone the directory
 2. cd into chip8 directory
-3. make a `programs` folder \[must be name just like that\]
+3. make a `programs` folder in the chip8 directory \[must be name `programs`\]
 4. add Your ROM to the `programs` folder 
 4. run: `make chip8`
 5. run: `make run`
