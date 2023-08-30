@@ -16,7 +16,7 @@ some more features to add in the future will be:
 3. make a `programs` folder \[must be name just like that\]
 4. add Your ROM to the `programs` folder 
 4. run: `make chip8`
-5. run: `./chip8`
+5. run: `make run`
 6. select the menu number for your ROM of choice
 7. enter the desired framerate for your selected ROM 
 
