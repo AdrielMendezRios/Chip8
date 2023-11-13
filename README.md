@@ -1,3 +1,6 @@
+![](https://github.com/AdrielMendezRios/Chip8/blob/main/gifs/trip8.gif)   ![](https://github.com/AdrielMendezRios/Chip8/blob/main/gifs/Snake.gif)
+![](https://github.com/AdrielMendezRios/Chip8/blob/main/gifs/flightrunner.gif)  ![](https://github.com/AdrielMendezRios/Chip8/blob/main/gifs/astros.gif)
+
 # Chip8
 A _very_ **simple** Chip8 emulator in C \[Work in progress\]
 
