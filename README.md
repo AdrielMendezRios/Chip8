@@ -13,15 +13,15 @@ some more features to add in the future will be:
 - in window game selection menu (right now you select your game through the command line)
 - theming/ color picker
 
-## how to run
+## how to run (on MacOS)
 1. clone the directory
 2. cd into chip8 directory
 3. make a `programs` folder in the chip8 directory \[must be name `programs`\]
-4. add Your ROM to the `programs` folder 
-4. run: `make chip8`
-5. run: `make run`
-6. select the menu number for your ROM of choice
-7. enter the desired framerate for your selected ROM 
+4. add Your ROM to the `programs` folder
+5. with homebrew `brew install raylib`
+6. run: `make chip8`
+7. run: `make run`
+8. select the menu number for your ROM of choice
 
 some ROMs that run great on this chip8 emulator
 - https://johnearnest.github.io/chip8Archive/play.html?p=flightrunner
