@@ -32,8 +32,8 @@
 #include <time.h>
 
 // raylib modules
-#include <raylib.h>
-#include <raymath.h>
+#include </opt/homebrew/include/raylib.h>
+#include </opt/homebrew/include/raymath.h>
 
 
 #define MEMORY_SIZE 4096
@@ -57,6 +57,7 @@ typedef struct Chip8{
     int         screen[HEIGHT][WIDTH];
     size_t      rom_size;
     char        hrop[50]; // human readable opcode
+    uint16_t    keypad;  // Add this for key state
 } Chip8;
 
 static const uint8_t fonts[] = {
@@ -184,22 +185,17 @@ void play_game_sound(unsigned char timer, Sound sound){
 
 // renders the frame to the frame_target raylib texture
 void render_frame() {
-    // Clear the rendering target
     BeginTextureMode(frame_target);
-    // ClearBackground(BLACK);
-
-    // Draw the pixels onto the rendering target
+    static unsigned char previous_buffer[32][64] = {0};
+    
     for (int y = 0; y < 32; y++) {
         for (int x = 0; x < 64; x++) {
-            if (frameBuffer[y][x]) {
-                DrawPixel(x, y, WHITE);
-            }
-            else{
-                DrawPixel(x, y, BLACK);
+            if (frameBuffer[y][x] != previous_buffer[y][x]) {
+                DrawPixel(x, y, frameBuffer[y][x] ? WHITE : BLACK);
+                previous_buffer[y][x] = frameBuffer[y][x];
             }
         }
     }
-
     EndTextureMode();
 }
 
@@ -297,468 +293,281 @@ void printState(Chip8 *chip){
 
 *****************************************************************/
 
-// interprets the current chip8 opcode and executes the instruction
-void interpreter(Chip8 *chip){
-    
+// Forward declarations of instruction handlers
+void handle_0_instructions(Chip8 *chip, uint16_t opcode);
+void handle_8_instructions(Chip8 *chip, uint16_t opcode, uint8_t x, uint8_t y, uint8_t Vx, uint8_t Vy);
+void handle_E_instructions(Chip8 *chip, uint16_t opcode, uint8_t x, uint8_t Vx);
+void handle_F_instructions(Chip8 *chip, uint16_t opcode, uint8_t x, uint8_t Vx);
+void handle_display_draw(Chip8 *chip, uint16_t opcode, uint8_t Vx, uint8_t Vy);
+void update_input(Chip8 *chip);
+
+void interpreter(Chip8 *chip) {
     getop(chip);
     uint16_t opcode = chip->opcode;
-    // printf("interpreting: 0x%04x\n", opcode);
-    uint8_t x = (opcode & 0x0F00)>> 8; // in AxyB get x
-    uint8_t y = (opcode & 0x00F0) >> 4; // in AxyB get y
+    uint8_t x = (opcode & 0x0F00) >> 8;
+    uint8_t y = (opcode & 0x00F0) >> 4;
     uint8_t Vx = chip->v[x];
     uint8_t Vy = chip->v[y];
-    uint8_t I = chip->I;
 
+    // Update input state at CPU rate
+    update_input(chip);
 
-    // This Switch statement is too huge, needs breaking down, but it works for now.
-    switch (opcode & 0xF000){
+    switch (opcode & 0xF000) {
         case 0x0000:
-            /* fall in if opcode is an instruction starting with 0x0___*/
-            switch(opcode){
-                // Clear Screen
-                case 0x00E0:{ // CLR (clear screen)
-                    // strcpy(chip->hrop, "CLR\0");
-                    clear_screen(chip);
-                    chip->pc += 2;
-                    break;
-                }
-                // Return from Subrouting
-                case 0x00EE: {// RET 
-                    // strcpy(chip->hrop, "RET. return from subroutine\0");
-                    chip->pc = chip->stack[chip->sp--];
-                    chip->pc +=2;
-                    break;
-                }
-            }
+            handle_0_instructions(chip, opcode);
             break;
-        // JP to addr nnn
-        case 0x1000:{ // 1nnn
-            // strcpy(chip->hrop, "JP to Addr nnn\0");
-            // sets pc to nnn
-
+        case 0x1000: // JP addr
             chip->pc = (opcode & 0x0FFF);
             break;
-        }
-        // CALL subroutine at addr nnn
-        case 0x2000:{ // 2nnn
-            // strcpy(chip->hrop, "CALL subroutine at nnn\0");
+        case 0x2000: // CALL addr
             chip->stack[++chip->sp] = chip->pc;
-            // Call subroutine at nnn
             chip->pc = (opcode & 0x0FFF);
             break;
-        }
-        // Skip if Equal [immediate]
-        case 0x3000:{ // 3xkk: SE Vx, byte. if v[x] == kk (immediate byte) skip next instruction (pc + 2)
-            
-            // strcpy(chip->hrop, "3xkk: Skip if Vx == kk\0");
+        case 0x3000: // SE Vx, byte
             if (Vx == (opcode & 0x00FF)){
                 chip->pc += 4;
             }else {
                 chip->pc += 2;
             }
-
             break;
-        }
-        // Skip if Not Equal [immediate]
-        case 0x4000:{ // 0x4xkk: SNE Vx, byte. if v[x] != kk (immediate byte) skip next instruction (pc + 2)
-            // strcpy(chip->hrop, "Skip if Vx != kk\0");
+        case 0x4000: // SNE Vx, byte
             if (Vx != (opcode & 0x00FF)) {
                 chip->pc += 4;
             } else {
                 chip->pc += 2;
             }
             break;
-        }
-        // Skip if Equal [register]
-        case 0x5000:{ // 0x5xy0: SE Vx, Vy. if v[x] == v[y] skip next instruction (pc + 2)
-            // strcpy(chip->hrop, "Skip if Vx == Vy\0");
+        case 0x5000: // SE Vx, Vy
             if (Vx == Vy){
                 chip->pc += 4;
             } else {
                 chip->pc += 2;
             }
             break;
-        }
-        // Load [immediate] into Vx register
-        case 0x6000:{ // 0x6xkk: LD Vx, byte. set v[x] = kk
-            // strcpy(chip->hrop, "LD byte into Vx\0");
+        case 0x6000: // LD Vx, byte
             chip->v[x] = (opcode & 0x00FF);
             chip->pc += 2;
             break;
-        }
-        // Add [immediate] to Vx register
-        case 0x7000:{ // 0x7xkk: ADD Vx, byte. set v[x] += kk
-            // strcpy(chip->hrop, "ADD Vx, byte\0");
+        case 0x7000: // ADD Vx, byte
             chip->v[x] += (opcode & 0x00FF);
             chip->pc += 2;
             break;
-        }
-        //0x8.... == Logical and Arithmetic instructions
-        case 0x8000:{
-            /* fall in if its an instruction starting with 0x8___*/
-            switch(opcode & 0x000F){ // find which version of 0x8__i the opcode has
-                // Load(store) value in Vy register into Vx register
-                case 0x0:{ //0x8xy0 LD Vx, Vy
-                    // strcpy(chip->hrop, "LD Vx, Vy. store the value in v[y] in v[x]\0");
-                    chip->v[x] = Vy;
-                    chip->pc += 2;
-                    break;
-                }
-                // Bitwise OR on the values of Vx and Vy, then store in Vx
-                case 0x1:{ //0x8xy1. OR Vx, Vy
-                    // strcpy(chip->hrop, "OR Vx, Vy. bitwise OR on the values of Vx and Vy, then store in Vx.\0");
-                    chip->v[x] = Vx | Vy;
-                    chip->pc += 2;
-                    break;
-                }
-                // Bitwise AND on the values of Vx and Vy, then store in Vx
-                case 0x2:{ //0x8xy2. AND Vx, Vy
-                    // strcpy(chip->hrop, "AND Vx, Vy. bitwise AND on the values of Vx and Vy, then store in Vx\0");
-                    chip->v[x] = Vx & Vy; 
-                    chip->pc += 2;
-                    break;
-                }
-                // Bitwise XOR on the values of Vx and Vy, then store in Vx
-                case 0x3:{ //0x8xy3. XOR Vx, Vy
-                    // strcpy(chip->hrop, "XOR Vx, Vy. bitwise Exclusive OR on the values of Vx and Vy. then store in Vx.\0");
-                    chip->v[x] = Vx ^ Vy;
-                    chip->pc += 2;
-                    break;
-                }
-                /* 
-                    ADD Vx, Vy. Add values in both registers and if the result if greater than 8 bits 
-                    VF is set to 1, otherwise 0. the lowest 8bits are stored in Vx.
-                */
-                case 0x4:{ //0x8xy4. ADD Vx, Vy
-                    // strcpy(chip->hrop, "ADD Vx, Vy\0");
-                    uint16_t sum = Vx + Vy;
-
-                    // set Vf to 1 if sum > 0xFF (255) or 0 if sum < 0xFF
-                    chip->v[0xF] = sum > 0xFF;
-
-                    // store the lower 8 bits of sum into Vx
-                    chip->v[x] = sum & 0xFF;
-
-                    chip->pc += 2;
-                    break;
-                }
-                /*
-                    SUB Vx - Vy. if Vx > Vy then Vf is set to 1, otherwise 0. then Vy subtracted from Vx
-                    result stored in Vx.
-                */
-                case 0x5:{ //0x8xy5. SUB Vx, Vy
-                    // strcpy(chip->hrop, "SUB Vx, Vy, set Vf = NOT borrow\0");
-                    // // set Vf to 1 if Vx > Vy, otherwise set Vf to 0
-                    chip->v[0xF] = Vx >= Vy;
-                    
-                    // subtract Vy from Vx, store difference in Vx
-                    chip->v[x] = Vx - Vy;
-                    
-                    chip->pc += 2;
-
-                    break;
-                }
-                /*
-                    set Vx = Vx SHR 1. (shift right by 1)
-                    if least-sig bit of Vx is 1, then VF is set to 1, otherwise 0. then Vx is divided by 2
-                */
-                case 0x6:{ //0x8xy6. SHR Vx {, Vy}
-                    // strcpy(chip->hrop, "SHR Vx {, Vy}. Vx = Vx SHR 1\0");
-                    chip->v[0xF] = Vx & 0x1;
-                    chip->v[x] >>= 1;
-                    // chip->v[x] /= 2;
-                    chip->pc += 2;
-                    break;
-                }
-                /*
-                    set Vx = Vy - Vx. if Vy > Vx, then Vf is set to 1, otherwise 0. then Vx is subtracted from Vy,
-                    result stored in Vx.
-                */
-                case 0x7:{// SUBN Vx, Vy, set VF = NOT borrow.
-                    // strcpy(chip->hrop, "SUBN Vx, Vy, set Vf = NOT borrow\0");
-
-                    // set Vf to 1 if Vy > Vx, otherwise set to 0
-                    chip->v[0xF] = Vy >= Vx;
-                    
-                    // set Vx = Vy - Vx
-                    chip->v[x] = Vy - Vx;
-
-                    chip->pc +=2;
-                    break;
-                }
-                /*
-                    set Vx = Vx SHL 1. if most-sig bit of Vx is 1, then VF is set to 1, otherwise 0.
-                    then Vx is multiplied by 2.
-                */
-                case 0xE:{// SHL Vx {, Vy}
-                    // strcpy(chip->hrop, "SHL Vx {, Vy}. Vx = Vx SHL 1\0");
-                    // set Vf to the left-most digit. (mask all but the left most bit, then shift it to right-most bit) 
-                    chip->v[0xF] = (Vx & 0x80) >> 7;
-
-                    chip->v[x] <<= 1; // shit left by 1 (aka multiply by 2)
-
-                    chip->pc += 2;
-                    break;
-                }
-            }
+        case 0x8000:
+            handle_8_instructions(chip, opcode, x, y, Vx, Vy);
             break;
-        } // end of 0x8000 instructions
-        // Skip Next instruction if Vx NOT EQUAL to Vy, if EQUAL, increase pc + 2
-        case 0x9000:{ // SNE Vx, Vy
+        case 0x9000: // SNE Vx, Vy
             if (Vx != Vy){
                 chip->pc += 4;
                 break;
             }
             chip->pc += 2;
             break;
-        }
-        // Load Addr nnn to Register I
-        case 0xA000:{ // LD I, Addr
-            // strcpy(chip->hrop, "LD I, Addr\0");
+        case 0xA000: // LD I, Addr
             chip->I  = opcode & 0x0FFF;
             chip->pc += 2;
             break;
-        }
-        // Jump. set pc to nnn + value in V0
-        case 0xB000:{ // JP V0, addr
+        case 0xB000: // JP V0, addr
             chip->pc = (opcode & 0x0FFF) + chip->v[0];
             break;
-        }
-        // (Bitwise AND) random Byte AND kk, then store in Vx
-        case 0xC000:{// RND Vx, byte 
-            /*
-                interpreter generates a random number from 0 to 255, which is ANDed with kk, the result is stored in Vx.
-            */
+        case 0xC000: // RND Vx, byte
             srand(time(NULL));
-            uint8_t r = rand() % 255; // random number from 0 - 255
+            uint8_t r = rand() % 255;
             
-            // r & kk
             chip->v[x] = r & (opcode & 0x00FF);
             
             chip->pc += 2;
             break;
-        }
-        // Draw Pixel to screen
-        case 0xD000: {
-            /* DRW, Vx, Vy, nibble (DxyN)*/
-            /*
-                display n-byte sprite starting at memory location I at (vx, vy), set VF = Collision.
+        case 0xD000:
+            handle_display_draw(chip, opcode, Vx, Vy);
+            break;
+        case 0xE000:
+            handle_E_instructions(chip, opcode, x, Vx);
+            break;
+        case 0xF000:
+            handle_F_instructions(chip, opcode, x, Vx);
+            break;
+    }
+}
 
-                The interpreter reads n bytes from memory, starting at the address stored in I. 
-                these bytes are then displayed as sprites on the screeen at coordinates (Vx, Vy). 
-                sprites are XORed onto the existing screen. if this causes any pixeles
-                to be erased, VF is set to 1, otherwise it is set to 0. if the sprite is positioned so 
-                part of it is outside the coordinates of the display it wraps around to the opposite side of the screen.
-            */
-            // strcpy(chip->hrop,"DRW Vx, Vy, nibble\0");
-            // Create a temporary buffer for the frame
-            // unsigned char frameBuffer[32][64];
-
-            // Copy the current screen state to the frame buffer
-            for (int y = 0; y < 32; y++) {
-                for (int x = 0; x < 64; x++) {
-                    frameBuffer[y][x] = chip->screen[y][x];
-                }
-            }
-
-            unsigned char height = opcode & 0xF;
-            chip->v[0xF] = 0;
-
-            for (int row = 0; row < height; row++) {
-                uint8_t sprite = chip->memory[chip->I + row];
-                int spriteY = Vy + row;
-
-                uint8_t bitmask = 0x80; // Start with the leftmost bit
-
-                for (int col = 0; col < 8; col++) {
-                    int spriteX = Vx + col;
-
-                    if (sprite & bitmask) {
-                        int screenX = spriteX; 
-                        int screenY = spriteY; 
-
-                        if (screenX >= 0 && screenX < 64 && screenY >= 0 && screenY < 32) {
-                            chip->v[0xF] |= chip->screen[spriteY][spriteX]; // Set VF (collision flag)
-                            chip->screen[spriteY][spriteX] ^= 1; // Toggle the pixel value
-
-                            // Draw the pixel directly on the frame buffer
-                            frameBuffer[spriteY][spriteX] = chip->screen[spriteY][spriteX] ? 1 : 0;
-                        }
-                    }
-
-                    bitmask >>= 1; // Shift the bitmask to the right
-                }
-            }
-
-            // // Clear the rendering target
-            // BeginTextureMode(frame_target);
-            //     // ClearBackground(BLACK);
-
-            //     // Draw the pixels onto the rendering target
-            //     for (int y = 0; y < 32; y++) {
-            //         for (int x = 0; x < 64; x++) {
-            //             if (frameBuffer[y][x]) {
-            //                 DrawPixel(x, y, WHITE);
-            //             }
-            //             else{
-            //                 DrawPixel(x, y, BLACK);
-            //             }
-            //         }
-            //     }
-
-            // EndTextureMode();
-            // // Draw the texture on the Raylib window with scaling
-            // BeginDrawing();
-
-            //     // ClearBackground(BLACK);
-            //     DrawTexturePro(frame_target.texture, (Rectangle){0, 0, (float)frame_target.texture.width, (float)-frame_target.texture.height}, (Rectangle){0, 0, 640, 320}, (Vector2){0, 0}, 0.0f, WHITE);
-
-            // EndDrawing();
-
+// Implementation of instruction handlers
+void handle_0_instructions(Chip8 *chip, uint16_t opcode) {
+    switch(opcode) {
+        case 0x00E0: // CLR
+            clear_screen(chip);
             chip->pc += 2;
+            break;
+        case 0x00EE: // RET
+            chip->pc = chip->stack[chip->sp--];
+            chip->pc += 2;
+            break;
+    }
+}
 
-        break;
-        }
-        // KEY PRESS INSTRUCTIONS
-        case 0xE000:{
-            /* fall in if opcode is an instruction starting with 0xE0__*/
-            switch (opcode & 0x00FF){
-                // skip instruction if key with value in Vx pressed
-                case 0x009E:{ // SKP Vx
-                    /*
-                        Checks the keyboard, and if the key corresponding to the value of Vx is currently
-                        in the down position, pc is increased by 2.
-                    */
-                    int target_key = Vx;
-                    if (IsKeyDown(keyboardMapping(target_key))){ 
-                        chip->pc += 2;
-                    }
-
-                    chip->pc += 2;
-                    break;
-                }
-                // skip instruction if key with value in Vx not pressed
-                case 0x00A1:{ // SKPN Vx
-                    /*
-                        checks keyboard, and if the key corresponding to the value of Vx is currently 
-                        in the up position. pc is increased by 2.
-                    */
-                    int target_key = Vx;
-                    if (IsKeyUp(keyboardMapping(target_key))){ // keypad_keys_pressed[target_key]
-                        chip->pc += 2;
-                    }
-                    chip->pc += 2;
-                    break;
-                }
-            }
+void handle_8_instructions(Chip8 *chip, uint16_t opcode, uint8_t x, uint8_t y, uint8_t Vx, uint8_t Vy) {
+    switch(opcode & 0x000F) {
+        case 0x0: // LD Vx, Vy
+            chip->v[x] = Vy;
+            chip->pc += 2;
+            break;
+        case 0x1: // OR Vx, Vy
+            chip->v[x] = Vx | Vy;
+            chip->pc += 2;
+            break;
+        case 0x2: // AND Vx, Vy
+            chip->v[x] = Vx & Vy; 
+            chip->pc += 2;
+            break;
+        case 0x3: // XOR Vx, Vy
+            chip->v[x] = Vx ^ Vy;
+            chip->pc += 2;
+            break;
+        case 0x4: { // ADD Vx, Vy
+            uint16_t sum;
+            sum = Vx + Vy;
+            chip->v[0xF] = sum > 0xFF;
+            chip->v[x] = sum & 0xFF;
+            chip->pc += 2;
             break;
         }
-        case 0xF000:{
-            /* fall in if opcode is an instruction starting with 0xF0__*/
-            // find which version of 0xF__i the opcode has
-            switch(opcode & 0x00FF){  
-                // set Vx = Delay Timer value.
-                case 0x0007:{ // LD Vx, DT 
-                    // strcpy(chip->hrop,"LD Vx, DT (DelayTimer)\0");
-                    chip->v[x] = chip->delayTimer;
+        case 0x5: // SUB Vx, Vy
+            chip->v[0xF] = Vx >= Vy;
+            
+            chip->v[x] = Vx - Vy;
+            
+            chip->pc += 2;
+            break;
+        case 0x6: // SHR Vx {, Vy}
+            chip->v[0xF] = Vx & 0x1;
+            chip->v[x] >>= 1;
+            chip->pc += 2;
+            break;
+        case 0x7: // SUBN Vx, Vy, set Vf = NOT borrow.
+            chip->v[0xF] = Vy >= Vx;
+            
+            chip->v[x] = Vy - Vx;
+
+            chip->pc +=2;
+            break;
+        case 0xE: // SHL Vx {, Vy}
+            chip->v[0xF] = (Vx & 0x80) >> 7;
+
+            chip->v[x] <<= 1;
+
+            chip->pc += 2;
+            break;
+    }
+}
+
+void handle_E_instructions(Chip8 *chip, uint16_t opcode, uint8_t x, uint8_t Vx) {
+    switch (opcode & 0x00FF) {
+        case 0x009E: // SKP Vx
+            if (chip->keypad & (1 << Vx)) {
+                chip->pc += 2;
+            }
+            chip->pc += 2;
+            break;
+        case 0x00A1: // SKNP Vx
+            if (!(chip->keypad & (1 << Vx))) {
+                chip->pc += 2;
+            }
+            chip->pc += 2;
+            break;
+    }
+}
+
+void handle_F_instructions(Chip8 *chip, uint16_t opcode, uint8_t x, uint8_t Vx) {
+    switch(opcode & 0x00FF) {
+        case 0x0007: // LD Vx, DT
+            chip->v[x] = chip->delayTimer;
+            chip->pc += 2;
+            break;
+        case 0x000A: { // LD Vx, K
+            for (int i = 0; i < 16; i++) {
+                if (chip->keypad & (1 << i)) {
+                    chip->v[x] = i;
                     chip->pc += 2;
-                    break;
-                }
-                /*
-                    wait for a key press, store the value of the key into Vx.
-                    All execution stops until a key is pressed, then the value of that key is stored in Vx.
-                */
-                case 0x000A: {// LD Vx, K
-                    // strcpy(chip->hrop,"LD Vx, Key\0");
-                    int key = GetKeyPressed();
-                    if (key != 0){
-                        int keypad_key = keypadMapping(key);
-                        if (keypad_key != -1){
-                            chip->v[x] = keypad_key;
-                            chip->pc += 2;
-                        }
-                    }
-                    break;
-                }
-                // set Delay timer = Vx
-                case 0x0015:{ // LD DT, Vx
-                    // strcpy(chip->hrop,"LD DT, Vx. set Delay timer = Vx.\0");
-                    chip->delayTimer = Vx;
-                    chip->pc += 2;
-                    break;
-                }
-                // set Sound Timer = Vx
-                case 0x0018:{ // LD ST, Vx
-                    // strcpy(chip->hrop,"LD ST, Vx. set Sound Timer = Vx.\0");
-                    chip->soundTimer = Vx;
-                    chip->pc += 2;
-                    break;
-                }
-                // set I = I + Vx
-                case 0x001E: { // ADD I, Vx
-                    // strcpy(chip->hrop,"ADD I, Vx, set I += Vx.\0");
-                    chip->I += Vx;
-                    chip->pc += 2;
-                    break;
-                }
-                // set I = location of Font sprite for digit Vx.
-                case 0x0029: { // LD F, Vx. 
-                    /*
-                        the value of I is set to the location for the hexadecimal sprite corresponding to the value
-                        of Vx. 
-                    */
-                    // strcpy(chip->hrop,"LD F, Vx. load hex font into I\0");
-                    chip->I = Vx * 5;
-                    chip->pc += 2;
-                    break;
-                }
-                // store BCD representation of Vx in memory location I, I+1, and I+2.
-                case 0x0033:{ // LD B, Vx
-                    /*
-                        the interpreter takes the decimal value of Vx, and places the hundreds digit in memory location at I,
-                        the tens digit at memory location I+1, and the ones digit in location I+2.
-                    */
-                    // strcpy(chip->hrop,"LD B, Vx. store BCD representation of Vx in memory location I, I+1, and I+2.\0");
-                    chip->memory[chip->I] = ( Vx/ 100) % 10;
-					chip->memory[chip->I+1] = (Vx / 10) % 10;
-					chip->memory[chip->I+2] = (Vx % 10);
-                    // chip->memory[chip->I] = (chip->v[x] / 100) % 10;
-					// chip->memory[chip->I+1] = (chip->v[x] / 10) % 10;
-					// chip->memory[chip->I+2] = (chip->v[x] % 10);
-                    chip->pc += 2;
-                    break;
-                }
-                // store register V0 through Vx in memory starting at location I.
-                case 0x0055:{ // LD [I], Vx 
-                    /*
-                        the interpreser copies the vaues of resgisters V0 -> Vx into memory, starting at the address in I.
-                    */
-                    // strcpy(chip->hrop,"LD [I], Vx. store register V0 through Vx into memory starting at I\0");
-                    uint8_t i;
-                    for(i = 0x0; i <= x; i++){
-                        chip->memory[chip->I+i] = chip->v[i];
-                    }
-                    chip->pc += 2;
-                    break;
-                }
-                // Read Registers V0 -> Vx from memory starting at location I.
-                case 0x0065:{ // LD Vx, [I]
-                    /*
-                        Read Registers V0 -> Vx from memory starting at location I.
-                        the inerpreter reads values from memory starting at locaiton I into registers V0 -> Vx.
-                    */
-                    // strcpy(chip->hrop,"LD Vx, [I] load register V0 -> Vx from memory starting at I\0");
-                    uint8_t i;
-                    for(i = 0; i <= x; i++){
-                        chip->v[i] = chip->memory[chip->I + i];
-                    }
-                    chip->pc += 2;
-                    break;
+                    return;
                 }
             }
+            break;  // If no key pressed, PC doesn't advance
+        }
+        case 0x0015: // LD DT, Vx
+            chip->delayTimer = Vx;
+            chip->pc += 2;
+            break;
+        case 0x0018: // LD ST, Vx
+            chip->soundTimer = Vx;
+            chip->pc += 2;
+            break;
+        case 0x001E: // ADD I, Vx
+            chip->I += Vx;
+            chip->pc += 2;
+            break;
+        case 0x0029: // LD F, Vx. 
+            chip->I = Vx * 5;
+            chip->pc += 2;
+            break;
+        case 0x0033: // LD B, Vx
+            chip->memory[chip->I] = ( Vx/ 100) % 10;
+			chip->memory[chip->I+1] = (Vx / 10) % 10;
+			chip->memory[chip->I+2] = (Vx % 10);
+            chip->pc += 2;
+            break;
+        case 0x0055: { // LD [I], Vx 
+            uint8_t i;
+            for(i = 0x0; i <= x; i++){
+                chip->memory[chip->I+i] = chip->v[i];
+            }
+            chip->pc += 2;
+            break;
+        }
+        case 0x0065: { // LD Vx, [I]
+            uint8_t i;
+            for(i = 0; i <= x; i++){
+                chip->v[i] = chip->memory[chip->I + i];
+            }
+            chip->pc += 2;
             break;
         }
     }
+}
+
+void handle_display_draw(Chip8 *chip, uint16_t opcode, uint8_t Vx, uint8_t Vy) {
+    for (int y = 0; y < 32; y++) {
+        for (int x = 0; x < 64; x++) {
+            frameBuffer[y][x] = chip->screen[y][x];
+        }
+    }
+
+    unsigned char height = opcode & 0xF;
+    chip->v[0xF] = 0;
+
+    for (int row = 0; row < height; row++) {
+        uint8_t sprite = chip->memory[chip->I + row];
+        int spriteY = Vy + row;
+
+        uint8_t bitmask = 0x80;
+
+        for (int col = 0; col < 8; col++) {
+            int spriteX = Vx + col;
+
+            if (sprite & bitmask) {
+                int screenX = spriteX; 
+                int screenY = spriteY; 
+
+                if (screenX >= 0 && screenX < 64 && screenY >= 0 && screenY < 32) {
+                    chip->v[0xF] |= chip->screen[spriteY][spriteX];
+                    chip->screen[spriteY][spriteX] ^= 1;
+
+                    frameBuffer[spriteY][spriteX] = chip->screen[spriteY][spriteX] ? 1 : 0;
+                }
+            }
+
+            bitmask >>= 1;
+        }
+    }
+
+    chip->pc += 2;
 }
 
 // initialize chip8 emulator
@@ -770,7 +579,7 @@ Chip8* chip8_init(){
     return chip;
 }
 
-// loads the fonts into chip8 memory
+// initializes into chip8 memory
 void load_rom(Chip8 *chip, char* path){
     FILE *rom = NULL;
     size_t rom_size;
@@ -789,13 +598,13 @@ void load_rom(Chip8 *chip, char* path){
 
     rom_buff = (uint8_t *)malloc(rom_size);
     if(rom_buff == NULL){
-        fprintf(stderr, "%s", "Error: allocating memory for rom\n");
+        fprintf(stderr, "%s", "Error: could not allocate memory for rom\n");
         exit(1);
     }
 
     read_size = fread(rom_buff, sizeof(uint8_t), (size_t) rom_size, rom);
     if(read_size != rom_size){
-        fprintf(stderr, "%s", "Error: reading rom into rom buffer\n");
+        fprintf(stderr, "%s", "Error: could not read rom into rom buffer\n");
         exit(1);
     }
 
@@ -814,8 +623,22 @@ void load_rom(Chip8 *chip, char* path){
     
 }
 
+// Define constants for timing
+#define DISPLAY_HZ 120
+#define CPU_HZ 3500000  // Increased significantly for better responsiveness
 
-int main(){
+// Update keypad state at CPU rate (add to interpreter function before switch)
+void update_input(Chip8 *chip) {
+    chip->keypad = 0;
+    for (int i = 0; i < 16; i++) {
+        int key = keyboardMapping(i);
+        if (key != -1 && IsKeyDown(key)) {
+            chip->keypad |= (1 << i);
+        }
+    }
+}
+
+int main() {
     // get list of programs in `programs` folder
     DIR *d;
     struct dirent *dir;
@@ -856,16 +679,12 @@ int main(){
     closedir(d);
 
     // get user choice
+    char input[32];
+    int choice;
     printf("Which game would you like to play?[enter the number]\n");
-    char str_choice;
-    scanf("%s", &str_choice);
-    int choice = atoi(&str_choice);
-
-    printf("set frame rate. recommended [100-10,000+]\n");
-    char str_fps[10];
-    scanf("%s", str_fps);
-    int target_fps = atoi(str_fps);
-    printf("target fps: %d\n", target_fps);
+    if (fgets(input, sizeof(input), stdin) != NULL) {
+        choice = strtol(input, NULL, 10);
+    }
 
     // create path to program
     char* folder = "programs/";
@@ -883,28 +702,63 @@ int main(){
 
     // initialize Raylib window
     InitWindow(640, 320, "Chip8 Emulator by Adriel Méndez Ríos");
-    SetTargetFPS(target_fps);
+    SetTargetFPS(DISPLAY_HZ);  // Lock display refresh to 60 Hz
 
     // initialize Raylib Audio
     InitAudioDevice();
-
-    // initialize Raylib Texture/buffer
     frame_target = LoadRenderTexture(64, 32);
-
-    // setup Raylib sound
     Wave wav = LoadWave("Sounds/medSineWave.wav");
     Sound st_sound = LoadSoundFromWave(wav);
 
+    // For CPU timing
+    double last_cpu_time = GetTime();
+    double last_frame_time = GetTime();
+    double cpu_interval = 1.0 / CPU_HZ;
+    double frame_interval = 1.0 / DISPLAY_HZ;
+
     // Game Loop
-    while(!WindowShouldClose()){
-        interpreter(chip);
-        update_timers(chip);
-        // hack, need better solution
-        if (chip->soundTimer > 0 && !IsSoundPlaying(st_sound)){
-            play_game_sound(chip->soundTimer, st_sound);
+    while(!WindowShouldClose()) {
+        double current_time = GetTime();
+        
+        // Debug performance
+        static double last_fps_time = 0;
+        static int frame_counter = 0;
+        static int instruction_counter = 0;
+        frame_counter++;
+        
+        // Execute CPU instructions at CPU_HZ rate
+        while (current_time - last_cpu_time >= cpu_interval) {
+            interpreter(chip);
+            instruction_counter++;
+            last_cpu_time += cpu_interval;
         }
-        render_frame();
-        draw_frame();
+
+        // Update display at DISPLAY_HZ rate
+        if (current_time - last_frame_time >= frame_interval) {
+            if (current_time - last_fps_time >= 1.0) {
+                printf("FPS: %d, CPU Instructions/sec: %d\n", 
+                        frame_counter, 
+                        instruction_counter);
+                frame_counter = 0;
+                instruction_counter = 0;
+                last_fps_time = current_time;
+            }
+
+            update_timers(chip);
+            if (chip->soundTimer > 0 && !IsSoundPlaying(st_sound)) {
+                play_game_sound(chip->soundTimer, st_sound);
+            }
+            render_frame();
+            BeginDrawing();
+                ClearBackground(BLACK);
+                DrawTexturePro(frame_target.texture, 
+                    (Rectangle){0, 0, (float)frame_target.texture.width, (float)-frame_target.texture.height}, 
+                    (Rectangle){0, 0, 640, 320}, 
+                    (Vector2){0, 0}, 0.0f, WHITE);
+                DrawFPS(10,10);
+            EndDrawing();
+            last_frame_time += frame_interval;
+        }
     }
 
     // Clean up
