@@ -5,7 +5,7 @@
 A _very_ **simple** Chip8 emulator in C \[Work in progress\]
 
 Writen all in a single C file and including only two raylib modules (core, and raymath).
-This was my first endevour into writing an emulator and wanted to explore the simplicity and 'low-level'-ness
+This was my first endevour into writing an emulator and wanted to explore the simplicity and 'low-level' aspect
 of the C language. 
 its feature complete (implements all _necessary_ instructions, takes user input and renders to its own window)
 some more features to add in the future will be:
