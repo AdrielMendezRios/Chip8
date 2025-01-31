@@ -624,8 +624,12 @@ void load_rom(Chip8 *chip, char* path){
 }
 
 // Define constants for timing
-#define DISPLAY_HZ 120
-#define CPU_HZ 3500000  // Increased significantly for better responsiveness
+#define DISPLAY_HZ 60
+#define CPU_SPEED_NORMAL 700
+#define CPU_SPEED_FAST 1000
+#define CPU_SPEED_ULTRA 5000
+#define CPU_SPEED_MAX_1 3500000
+#define CPU_SPEED_MAX_2 5000000
 
 // Update keypad state at CPU rate (add to interpreter function before switch)
 void update_input(Chip8 *chip) {
@@ -678,8 +682,47 @@ int main() {
     //close directory stream
     closedir(d);
 
-    // get user choice
+    // CPU speed selection menu
+    printf("\nSelect CPU speed:\n");
+    printf("1. 700 Hz (Normal)\n");
+    printf("2. 1000 Hz (Fast)\n");
+    printf("3. 5000 Hz (Ultra)\n");
+    printf("4. 3.5 MHz (Maximum)\n");
+    printf("5. 5.0 MHz (Extreme)\n");
+    printf("6. Custom\n");
     char input[32];
+    int hz_choice;
+    int cpu_hz = CPU_SPEED_NORMAL;  // Default speed
+
+    printf("Enter your choice (1-5): ");
+    if (fgets(input, sizeof(input), stdin) != NULL) {
+        hz_choice = strtol(input, NULL, 10);
+        switch(hz_choice) {
+            case 1: cpu_hz = CPU_SPEED_NORMAL; break;
+            case 2: cpu_hz = CPU_SPEED_FAST; break;
+            case 3: cpu_hz = CPU_SPEED_ULTRA; break;
+            case 4: cpu_hz = CPU_SPEED_MAX_1; break;
+            case 5: cpu_hz = CPU_SPEED_MAX_2; break;
+            case 6: 
+                printf("Enter custom CPU speed in Hz (100-5000000): ");
+                if (fgets(input, sizeof(input), stdin) != NULL) {
+                    cpu_hz = strtol(input, NULL, 10);
+                    if (cpu_hz < 100 || cpu_hz > 5000000) {
+                        printf("Invalid speed, using normal speed (700 Hz)\n");
+                        cpu_hz = CPU_SPEED_NORMAL;
+                    }
+                }
+                break;
+            default: 
+                printf("Invalid choice, using normal speed (700 Hz)\n");
+                cpu_hz = CPU_SPEED_NORMAL;
+        }
+    }
+
+    printf("CPU Speed set to: %d Hz\n", cpu_hz);
+    double cpu_interval = 1.0 / cpu_hz;
+
+    // get user choice
     int choice;
     printf("Which game would you like to play?[enter the number]\n");
     if (fgets(input, sizeof(input), stdin) != NULL) {
@@ -713,7 +756,6 @@ int main() {
     // For CPU timing
     double last_cpu_time = GetTime();
     double last_frame_time = GetTime();
-    double cpu_interval = 1.0 / CPU_HZ;
     double frame_interval = 1.0 / DISPLAY_HZ;
 
     // Game Loop
