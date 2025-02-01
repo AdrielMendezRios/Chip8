@@ -60,7 +60,7 @@ typedef struct Chip8{
     uint16_t    keypad;  // Add this for key state
 } Chip8;
 
-static const uint8_t fonts[] = {
+const unsigned char fonts[] = {
     0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
     0x20, 0x60, 0x20, 0x20, 0x70, // 1
     0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
@@ -573,9 +573,9 @@ void handle_display_draw(Chip8 *chip, uint16_t opcode, uint8_t Vx, uint8_t Vy) {
 // initialize chip8 emulator
 Chip8* chip8_init(){
     Chip8 *chip = (Chip8*)malloc(sizeof(Chip8));
+    init_mem(chip);
     loadfonts(chip);
     chip->pc = 0x200;
-    init_mem(chip);
     return chip;
 }
 
@@ -642,7 +642,8 @@ void update_input(Chip8 *chip) {
     }
 }
 
-int main() {
+#ifndef TESTING
+int main(int argc, char *argv[]) {
     // get list of programs in `programs` folder
     DIR *d;
     struct dirent *dir;
@@ -817,3 +818,4 @@ int main() {
 
     return 0;
 }
+#endif
