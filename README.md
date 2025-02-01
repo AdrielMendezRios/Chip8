@@ -22,6 +22,8 @@ some more features to add in the future will be:
 6. run: `make chip8`
 7. run: `make run`
 8. select the menu number for your ROM of choice
+9. select cpu speed.
+10. play!
 
 some ROMs that run great on this chip8 emulator
 - https://johnearnest.github.io/chip8Archive/play.html?p=flightrunner
